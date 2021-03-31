@@ -17,7 +17,8 @@ class submission_util:
         self.Voronoi = None 
         self.Kkr = None
         self.Kkrimp = None
-        self.Option = None
+        self.Options = None
+        self.Is_submit_settings_done = False
 
     @classmethod
     def submit_settings (cls, Voronoi: Code, Kkr:Code, Kkrimp:Code, Option: Dict):
@@ -26,8 +27,28 @@ class submission_util:
         cls.Kkr = Kkr
         cls.Kkrimp = Kkrimp
         cls.Option = Option
+        cls.Is_submit_settings_done = True
 
-    def create_group_save_wc(self,group_label: str="", group_descr: str="", verbose: bool=False,
+##---------------------------------
+    def group_not_exist_create(self, group_label: str, group_descr:str=''):
+        from aiida.orm import load_group, Group
+        """
+            Check the group exist either must create
+        """
+        if group_descr==None:
+            group_descr='No Description is added'
+
+        try:
+             group = load_group(group_label)
+        except:
+            print('Group named {} is not exist but is being created .'.format(group_label))
+            group = Group(label=group_label, description=group_descr)
+            group.store()
+            print('Newly created group pk {}'.format(group.pk))
+        return group
+
+##---------------------------------
+   def create_group_save_wc(self,group_label: str="", group_descr: str="", verbose: bool=False,
             wc_list: list = [], wc_dict: dict = {}, debug: bool = True
                             ) -> Group :
         from aiida.orm import load_group, load_node
@@ -126,34 +147,32 @@ class submission_util:
         return all_combination_dict
 
 
-   
-    def group_not_exist_create(self, group_label: str, group_descr:str=''):
-        from aiida.orm import load_group, Group
-        """
-            Check the group exist either must create
-        """
-        if group_descr==None:
-            group_descr='No Description is added'
-
-        try:
-             group = load_group(group_label)
-        except:
-            print('Group named {} is not exist but is being created .'.format(group_label))
-            group = Group(label=group_label, description=group_descr)
-            group.store()
-            print('Newly created group pk {}'.format(group.pk))
-        return group
-
     from aiida.orm import Code
     from typing import Union
+
+##---------------------------------
     def submit_combine_imp(self, imp1_wc_node: Node, imp2_wc_node: Node, offset_imp2:Union[dict, Dict],
-                           kkr_imp_code: Code=None, kkr_code: Code=None, options: Union[Dict, dict]=None,
                            settings:Union[dict, Dict]=None , dry_run: bool=False, label:str = '', 
                            gf_host_remote: Dict = None, scf_wf_parameters: Union[Dict, dict] = None, 
-                           params_kkr_overwrite: Union[Dict, dict]=None) -> Union[WorkChainNode, str]:
+                           params_kkr_overwrite: Union[Dict, dict]=None, verbose: bool=False) -> Union[WorkChainNode, str]:
     "
         One combine_imps will be submited here.
     "
+
+        if not self.Is_submit_settings_done:
+            if verbose:
+                print('No settings from submission_util has been found, Therefore the needed info is extracted from imp_1 node.'
+            # extract code and option from the imp1_wc_node
+            kkr_code = imp1_wc_node.inputs.kkr
+            kkr_imp_code = imp1_wc_node.inputs.kkrimp
+            options = imp1_wc_node.inputs.options
+        elif self.Is_submit_settings_done:
+            kkr_code = self.Kkr
+            kkr_imp_code = self.Kkrimp
+            options = self.Options
+            if isinstance(options, dict):
+                options = Dict(dict=options)
+
         imp1_output = imp1_wc_node.outputs.workflow_info
         imp2_output = imp2_wc_node.outputs.workflow_info
         if scf_wf_parameters==None:
