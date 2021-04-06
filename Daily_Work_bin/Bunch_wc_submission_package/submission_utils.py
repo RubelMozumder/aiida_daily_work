@@ -19,7 +19,7 @@ class submission_utils:
         self.Kkrimp = None
         self.Options = None
         self.Is_submit_settings_done = False
-
+##----------------------------------
     @classmethod
     def submit_settings (cls, Voronoi: Code, Kkr:Code, Kkrimp:Code, Option: Dict):
         cls = cls()
@@ -87,8 +87,8 @@ class submission_utils:
 
         return group
 
-
-    def wc_lbl_in_group(self, node_pk: int = None, node: Node= None,  node_label: str =None, group_pk: int=None, 
+##-----------------------------------------
+    def wc_in_group(self, node_pk: int = None, node: Node= None,  node_label: str =None, group_pk: int=None, 
             group_label: str='', group: Group=None
                         )-> bool:
         """
@@ -116,8 +116,7 @@ class submission_utils:
             exist = False
  
         return exist
-
-
+##-------------------------------------------
 
     def create_combine_imps_combination(self, imp_list1: list, imp_list2: list)-> dict :
         "
