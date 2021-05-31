@@ -1,0 +1,1 @@
+This the file to test the switch option got git. For example to open this file and switch another branch. After to check that all the changes, which are not commited before, are move to the new branch as current HEAD and leaving the current branch with head~1
