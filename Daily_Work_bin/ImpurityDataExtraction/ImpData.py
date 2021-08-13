@@ -16,7 +16,7 @@ Module includes two classes:
 from aiida.orm import Node
 from typing import List
 import math as m
-from aiida_kkr.workflows import kkr_imp_sub_wc
+from aiida_kkr.workflows import kkr_imp_sub_wc, combine_imps_wc
 from aiida_kkr.calculations import KkrimpCalculation
 
 
@@ -358,11 +358,12 @@ class MultiImpuritiesData(object):
 
         self.multi_impurity_dict = multi_impurity_dict
                     
-    def ExtractDataMultipleNode(self, node_list: List[Node]):
+    def AppendDataMultipleNode(self, node_list: List[Node]):
         """Fill the Data Dict for a group of nodes.
         
-        Fill the Data Dict for a group nodes where each node created from
-        the same number of impurity calculation."""
+        Append the data from a group of nodes given in the 'node_list'
+        Data Dict where each node created from the same number of impurity
+        calculation."""
 
         if isinstance(node_list, list):
             for node in node_list:
@@ -370,9 +371,26 @@ class MultiImpuritiesData(object):
                 self.DataDictFill()
         else:
             raise TypeError('Parameter node_list should be list of node.')
-            
-        
-        
+    
+    @classmethod
+    def ExtractDictMultipleNode(cls, node_list:List[Node]):
+        """Use the MultiImpuritiesData class to extract data.
+
+        This classmethod will instantiate the class and collects 
+        magnetic data using instance method AppendDataMultipleNode
+        """
+        if issubclass(node_list[0].process_class, combine_imps_wc):
+            obj = cls(node=node_list[0])
+
+        for node in node_list[1:]:
+            if not issubclass(node_list[0].process_class, combine_imps_wc):
+                raise TypeError(f'The node {node} in the node list not'
+                                f' a {combine_imps_wc} class.')
+        obj.AppendDataMultipleNode(node_list=node_list[1:])
+
+        return obj
+
+
     def GetDataDict(self):
         """Return DataDict.
         Return the Data Dict that is already filled.
