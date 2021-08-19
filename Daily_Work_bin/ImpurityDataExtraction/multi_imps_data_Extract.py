@@ -43,6 +43,8 @@ class CoupleImpurityData(object):
                 and third impurities in the impurity list.
         """
         
+        self.J_data_uuid: str = None
+        self.calc_imps: int = None
         self.imp1: int = None
         self.imp2: int = None
         self.offset1: int = None
@@ -61,24 +63,34 @@ class CoupleImpurityData(object):
         self.mom1: float = None
         self.mom2: float = None
         self.tot_mom: float = None
-        
+       
+        # orders in imp pairs
         self.imp_order1: int = list(imp_orders.values())[0]
         self.imp_order2: int = list(imp_orders.values())[1]
         
         # To set the value for all attributes
+        if issubclass(node.process_class, combine_imps_wc):
+            self.ExtractData(node)
+        else:
+            raise TypeError(f'The node {node.uuid} is not a'
+                            f'combine_imps_wc subclass')
+
+
         self.ExtractData(node)
     
     
     def __str__(self):
-        print_str = (f'Zimp1: {self.imp1}, Zimp2: {self.imp2},\n'
+        print_str = (f'JijData_uuid: {self.J_data_uuid},\n'
+                     f'Total imps as part of calc: {self.calc_imps},\n'
+                     f'Zimp1: {self.imp1}, Zimp2: {self.imp2},\n'
                      f'offset1: {self.offset1}, offset2: {self.offset2},\n'
                      f'ilayer1: {self.il1}, ilayer2: {self.il2},\n'
                      f'J_ij: {self.J_ij},\n'
-                     f'D_ij: {self.D}, Dx: {self.Dx}, Dy: {self.Dy},'
+                     f'D_ij: {self.D}, Dx: {self.Dx}, Dy: {self.Dy},\n'
                      f' Dz:{self.Dz},\n'
-                     f'r_ij: {self.r}, rx: {self.rx}, ry: {self.ry}, '
+                     f'r_ij: {self.r}, rx: {self.rx}, ry: {self.ry},\n'
                      f'rz: {self.rz},\n'
-                     f'magnetic moment-1: {self.mom1},'
+                     f'magnetic moment-1: {self.mom1},\n'
                      f' magnetic moment-2: {self.mom2},\n'
                      f'total moment: {self.tot_mom}')
         return print_str 
@@ -96,7 +108,7 @@ class CoupleImpurityData(object):
             imps_info_in_exact_cluster = (workflow_info[
                                         'imps_info_in_exact_cluster'])
         except KeyError:
-            imps_info_in_exact_cluster = self.ExtractImpInfo(node)
+            imps_info_in_exact_cluster = ExtractImpInfo(node)
             
             
         try:
@@ -117,7 +129,8 @@ class CoupleImpurityData(object):
         zimp_index_cluster = [ind for ind, cluster_atom_info in 
                               enumerate(imp_cls) if cluster_atom_info[-2] in 
                               zimp]
-        
+        self.J_data_uuid = node.outputs.JijData.uuid
+        self.calc_imps = len(zimp_index_cluster)
         self.imp1 = int(imp_cls[zimp_index_cluster[imp_order1]][-2])
         self.imp2 = int(imp_cls[zimp_index_cluster[imp_order2]][-2])
         
@@ -166,67 +179,6 @@ class CoupleImpurityData(object):
         self.tot_mom = self.mom1 + self.mom2
         
         
-    def ExtractImpInfo(self, node):
-        """Extract impurity info from single kkrimp calc.
-        
-            This constructs and returns a python dict keeping info about two
-            single inpurities with respect to the original host structure e.i.
-            before transforming the center to the first impurity position.
-        """
-        
-        input_node_1 = node.inputs.impurity1_output_node
-        input_node_2 = node.inputs.impurity1_output_node
-        offset_imp2 = node.inputs.offset_imp2
-        
-        single_imp1_wc = self.get_imp_node_from_input(input_node_1)
-        single_imp2_wc = self.get_imp_node_from_input(input_node_2)
-        
-        impinfo1 = single_imp1_wc.inputs.impurity_info
-        impinfo2 = single_imp2_wc.inputs.impurity_info
-        # imp_info_in_exact_cluster keeps the exact data before
-        #creating the cluster will help to add more imps later.
-        imps_info_in_exact_cluster = ({'Zimps':[], 'ilayers':[], 
-                                      'offset_imps': [0]} ) 
-        #offset_imp contains offset_index for imps 2nd, 3rd so on
-        zimp_1= impinfo1.get_dict().get('Zimp') 
-        zimp_2= impinfo2.get_dict().get('Zimp')
-        if isinstance(zimp_1, list):
-            zimp_1 = zimp_1[0]
-        if isinstance(zimp_2, list):
-            zimp_2 = zimp_2[0]
-            
-        imps_info_in_exact_cluster['Zimps'].append(zimp_1)
-        imps_info_in_exact_cluster['Zimps'].append(zimp_2)
-        imps_info_in_exact_cluster['ilayers'].append(
-            impinfo1.get_dict().get('ilayer_center'))
-        imps_info_in_exact_cluster['ilayers'].append(
-            impinfo2.get_dict().get('ilayer_center'))
-        imps_info_in_exact_cluster['offset_imps'].append(
-            offset_imp2.get_dict().get('index'))
-        
-        return imps_info_in_exact_cluster
-                         
-        
-    def get_imp_node_from_input(self, impurity_output_node=None):
-        """ Extract parent node or calc node.
-        This extracts the parent workflow node or KkrimpCalculation
-        from 'impurity_output_node' given as input in combine_imps_wc 
-        workflow.
-        """
-        imp_out = impurity_output_node
-
-        kkrimpcalc_parents = imp_out.get_incoming(node_class=
-                             KkrimpCalculation).all()
-        if len(kkrimpcalc_parents) > 0:
-            parent_imp1_wc_or_calc = kkrimpcalc_parents[0].node
-        else:
-            inc = imp_out.get_incoming(link_label_filter=
-                    'workflow_info').all()
-            if len(inc)!=1:
-                raise ValueError('More input WorkChainNodes are found.')
-            parent_imp1_wc_or_calc = inc[0].node
-        
-        return parent_imp1_wc_or_calc
 
     
 class MultiImpuritiesData(object):
@@ -262,11 +214,13 @@ class MultiImpuritiesData(object):
         imp_num = len(self.zimps)
         multi_impurity_dict = dict()
         
+        multi_impurity_dict['calc_imps'] = []
+        multi_impurity_dict['J_data_uuid'] = []
         for imp_no in range(imp_num):
             multi_impurity_dict['imp'+str(imp_no)] = []
             multi_impurity_dict['offset'+str(imp_no)] = []
             multi_impurity_dict['ilayer'+str(imp_no)] = []
-            
+        
         multi_impurity_dict['i'] = []
         multi_impurity_dict['j'] = []
         multi_impurity_dict['Z_i'] = []
@@ -288,14 +242,13 @@ class MultiImpuritiesData(object):
     
     def DataDictFill(self):
         """Fill Data Dict.
-        
+
         Fill the data dict for all possible impurity couples.
         """
 
         multi_impurity_dict = self.multi_impurity_dict
         couple_imp_data_obj_list = []
-        
-        
+
         couple_imp_data_obj = None
         last_imp_order = None  
         # Fill all the impurity filled but not interaction
@@ -306,26 +259,28 @@ class MultiImpuritiesData(object):
                                       imp_orders={'imp_order1':imp1_order,
                                       'imp_order2': imp2_order})
                 couple_imp_data_obj_list.append(couple_imp_data_obj)
-                
+ 
                 last_imp_order = imp2_order
-                
+
             multi_impurity_dict['imp'+str(imp1_order)].append(
                                     couple_imp_data_obj.imp1)
             multi_impurity_dict['ilayer'+str(imp1_order)].append(
                                     couple_imp_data_obj.il1)
             multi_impurity_dict['offset'+str(imp1_order)].append(
                                     couple_imp_data_obj.offset1)
-            
+
         multi_impurity_dict['imp'+str(last_imp_order)].append(
                                     couple_imp_data_obj.imp2)
         multi_impurity_dict['ilayer'+str(last_imp_order)].append(
                                     couple_imp_data_obj.il2)
         multi_impurity_dict['offset'+str(last_imp_order)].append(
                                     couple_imp_data_obj.offset2)
-        
-        
+
+
         # Here to fill up the data
         for enum, obj in enumerate(couple_imp_data_obj_list):
+            multi_impurity_dict['J_data_uuid'].append(obj.J_data_uuid)
+            multi_impurity_dict['calc_imps'].append(obj.calc_imps)
             multi_impurity_dict['i'].append(obj.imp_order1)
             multi_impurity_dict['j'].append(obj.imp_order2)
             multi_impurity_dict['Z_i'].append(obj.imp1)
@@ -377,10 +332,13 @@ class MultiImpuritiesData(object):
         """Use the MultiImpuritiesData class to extract data.
 
         This classmethod will instantiate the class and collects 
-        magnetic data using instance method AppendDataMultipleNode
+        magnetic data using instance method AppendDataMultipleNode(self)
         """
         if issubclass(node_list[0].process_class, combine_imps_wc):
             obj = cls(node=node_list[0])
+        else:
+            raise TypeError(f'The node {node_list[0].uuid} is not a'
+                            f'combine_imps_wc subclass')
 
         for node in node_list[1:]:
             if not issubclass(node_list[0].process_class, combine_imps_wc):
@@ -406,4 +364,69 @@ class MultiImpuritiesData(object):
         multi_impurity_dict = self.multi_impurity_dict
         print_str = (f'multi impurity dict: \n{multi_impurity_dict}')
         return print_str
+def ExtractImpInfo(node):
+    """Extract impurity info from single kkrimp calc.
+             
+        This constructs and returns a python dict keeping info about two
+        single inpurities with respect to the original host structure e.i.
+        before transforming the center to the first impurity position.
+
+        Note: This ExtractImpInfo is required for the old combined_imps_wc
+              for the calculation with the new version it irrelevant.
+    """
+    
+    input_node_1 = node.inputs.impurity1_output_node
+    input_node_2 = node.inputs.impurity2_output_node
+    offset_imp2 = node.inputs.offset_imp2
+    
+    single_imp1_wc = get_imp_node_from_input(input_node_1)
+    single_imp2_wc = get_imp_node_from_input(input_node_2)
+    
+    impinfo1 = single_imp1_wc.inputs.impurity_info
+    impinfo2 = single_imp2_wc.inputs.impurity_info
+    
+    imps_info_in_exact_cluster = ({'Zimps':[], 'ilayers':[], 
+                                  'offset_imps': [0]} )
+
+    #offset_imp contains offset_index for imps 2nd, 3rd so on
+    zimp_1 = impinfo1.get_dict().get('Zimp') 
+    zimp_2 = impinfo2.get_dict().get('Zimp')
+
+    if isinstance(zimp_1, list):
+        zimp_1 = zimp_1[0]
+    if isinstance(zimp_2, list):
+        zimp_2 = zimp_2[0]
         
+    imps_info_in_exact_cluster['Zimps'].append(zimp_1)
+    imps_info_in_exact_cluster['Zimps'].append(zimp_2)
+    imps_info_in_exact_cluster['ilayers'].append(
+        impinfo1.get_dict().get('ilayer_center'))
+    imps_info_in_exact_cluster['ilayers'].append(
+        impinfo2.get_dict().get('ilayer_center'))
+    imps_info_in_exact_cluster['offset_imps'].append(
+        offset_imp2.get_dict().get('index'))
+    
+    return imps_info_in_exact_cluster
+                     
+    
+def get_imp_node_from_input(impurity_output_node):
+    """ Extract parent node or calc node.
+    This extracts the parent workflow node or KkrimpCalculation
+    from 'impurity_output_node' given as input in combine_imps_wc 
+    workflow.
+    """
+    imp_out = impurity_output_node
+
+    kkrimpcalc_parents = imp_out.get_incoming(node_class=
+                         KkrimpCalculation).all()
+    if len(kkrimpcalc_parents) > 0:
+        parent_imp1_wc_or_calc = kkrimpcalc_parents[0].node
+    else:
+        inc = imp_out.get_incoming(link_label_filter=
+                'workflow_info').all()
+        if len(inc)!=1:
+            raise ValueError('More input WorkChainNodes are found.')
+        parent_imp1_wc_or_calc = inc[0].node
+    
+    return parent_imp1_wc_or_calc
+
